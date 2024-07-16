@@ -12,7 +12,7 @@
 		"start": "node index.js",
 		"build": "cd react && npm run build",
 		"serve": "cd react && npm run build && cd .. && node index.js",
-		"dev": "concurrently \"cd react && npm run start\" \"cd server && npm run start\""
+		"dev": "concurrently \"cd react && npm run start\" \"cd .. && nodemon index.js\""
 	},
 	"keywords": [
 		"datamine",

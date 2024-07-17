@@ -1,6 +1,10 @@
 {
 	"dependencies": {
-		"express": "^4.19.2"
+		"chalk": "^4.1.2",
+		"express": "^4.19.2",
+		"mineflayer": "^4.20.1",
+		"sqlite": "^5.1.1",
+		"sqlite3": "^5.1.7"
 	},
 	"name": "datamine",
 	"version": "1.0.0",
@@ -12,7 +16,7 @@
 		"start": "node index.js",
 		"build": "cd react && npm run build",
 		"serve": "cd react && npm run build && cd .. && node index.js",
-		"dev": "concurrently \"cd react && npm run start\" \"cd .. && nodemon index.js\""
+		"dev": "concurrently \"cd react && npm run start\" \"nodemon index.js\""
 	},
 	"keywords": [
 		"datamine",

@@ -53,18 +53,23 @@ const tables = [
         server TEXT,
         nick TEXT,
         reason TEXT,
+        duration TEXT,
+        by TEXT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS kicks(
         server TEXT,
         nick TEXT,
         reason TEXT,
+        by TEXT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS mutes(
         server TEXT,
         nick TEXT,
         reason TEXT,
+        duration TEXT,
+        by TEXT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )`
 ];
@@ -97,14 +102,85 @@ function createBot(nick, server) {
         if(server.startsWith("s")) server = servers[server];
     });
 
+    let banInfo = {};
     bot.on('messagestr', (msg) => {
         const rawMsg = msg;
         if(checkMessage(bot, msg)) return;
 
         console.log(`<${msg}>`);
         const args = msg.split(' ');
+
+        if (msg.startsWith('** ')) {
+            const parts = msg.split(' ');
+            parts.shift();
+            const nick = parts[0];
+            const rank = parts.slice(2, parts.indexOf('в')).join(' ');
+            if(ranks.includes(rank))
+                db.run(`UPDATE players SET rank = ? WHERE nick = ? AND server = ?`, [rank, nick, server], (err) => {
+                    if (err) {
+                        console.error(err.message);
+                    }
+                });
+        }
         
-        if(args[0].includes("ɢ") || args[0].includes("ʟ")) { // Global or local chat
+        // Anticheat logging
+        if (msg.startsWith('АнтиЧит')) {
+            const parts = msg.split(' ');
+            const nick = parts[3];
+            const reason = parts.slice(5).join(' ');
+            db.run(`INSERT INTO kicks (server, nick, reason, by, timestamp) VALUES (?, ?, ?, ?, ?)`, [server, nick, reason, "Anti-Cheat", new Date().toISOString()], (err) => {
+                if (err) {
+                    console.error(err.message);
+                }
+            });
+        }
+
+        // Punishment logging
+        if (msg.startsWith(' »')) {
+            const parts = msg.split(' ');
+            parts.shift();
+            parts.shift();
+            const action = parts[2];
+
+            if (action === 'забанен' || action === 'замучен' || action === 'кикнут' || (action === 'забанен' && parts[3] === 'по' && parts[4] === 'айпи')) {
+                banInfo.nick = parts[0];
+                banInfo.action = action === 'забанен' && parts[3] === 'по' && parts[4] === 'айпи' ? 'забанен по айпи' : action;
+                banInfo.by = parts[3] === 'по' && parts[4] === 'айпи' ? parts[6] : parts[4];
+            } else if (msg.includes('Причина:')) {
+                banInfo.reason = msg.split(': ').slice(1).join(': ').trim();
+            } else if (msg.includes('Время:')) {
+                banInfo.duration = msg.split(': ').slice(1).join(': ').trim();
+            }
+
+            if (banInfo.nick && banInfo.reason && banInfo.duration && banInfo.action && banInfo.by) {
+                if (banInfo.action === 'кикнут') {
+                    db.run(`INSERT INTO kicks (server, nick, reason, by) VALUES (?, ?, ?, ?)`, [server, banInfo.nick, banInfo.reason, banInfo.by], (err) => {
+                        if (err) {
+                            console.error(err.message);
+                        }
+                    });
+                } else {
+                    let tableName;
+                    if (banInfo.action === 'забанен') {
+                        tableName = 'bans';
+                    } else if (banInfo.action === 'замучен') {
+                        tableName = 'mutes';
+                    } else if (banInfo.action === 'кикнут') {
+                        tableName = 'kicks';    
+                    }
+
+                    db.run(`INSERT INTO ${tableName} (server, nick, reason, duration, by) VALUES (?, ?, ?, ?, ?)`, [server, banInfo.nick, banInfo.reason, banInfo.duration, banInfo.by], (err) => {
+                        if (err) {
+                            console.error(err.message);
+                        }
+                    });
+                }
+                banInfo = {};
+            }
+        }
+
+        // Message logging
+        if(args[0].includes("ɢ") || args[0].includes("ʟ")) {
             args.shift();
 
             const a = args[0];
@@ -130,6 +206,8 @@ function createBot(nick, server) {
                 rank = b;
                 nick = c;
             }
+
+            if(rank && rank.startsWith("⸢")) rank = "Игрок";
 
             db.get(`SELECT * FROM players WHERE nick = ? AND server = ?`, [nick, server], (err, row) => {
                 if (err) {
@@ -209,7 +287,7 @@ function checkMessage(bot, msg) {
         return true;
     }
 
-    if (msg.startsWith('› ') || msg.startsWith("♦") || msg.startsWith("[+]") || msg.startsWith("▪") || msg.startsWith("Ответь на вопрос:") || msg.startsWith("Правильный ответ:") || msg.startsWith("Победил игрок:") || msg.startsWith("Вы перемещены в лобби") || msg.startsWith("Решите") || msg.startsWith("Награда")) return true;
+    if (msg.startsWith('› ') || msg.startsWith("♦") || msg.startsWith("[+]") || msg.startsWith("▪") || msg.startsWith("Ответь на вопрос:") || msg.startsWith("Правильный ответ:") || msg.startsWith("Победил игрок:") || msg.startsWith("Вы перемещены в лобби") || msg.startsWith("Решите") || msg.startsWith("Награда") || msg.startsWith("Lottery") || msg.startsWith("ЧАТ-ИГРА")) return true;
     if(msg == "Для чего это нужно" ||
         msg == "Добро пожаловать на проект MasedWorld" ||
         msg == `Важно для вашей безопасности!!! 
